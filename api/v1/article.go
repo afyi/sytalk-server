@@ -12,11 +12,20 @@ import (
 	"github.com/afyi/sytalk/model"
 	"github.com/gin-gonic/gin"
 	"github.com/mileusna/useragent"
+	"github.com/qiniu/qmgo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+var (
+	cli  *qmgo.QmgoClient
+	ctx1 context.Context = context.TODO()
+)
+
 func GetArticleList(ctx *gin.Context) {
+
+	// 查询完记得释放
+	defer close(ctx)
 
 	// 当前页
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
@@ -26,20 +35,7 @@ func GetArticleList(ctx *gin.Context) {
 
 	var article []model.Article
 
-	ctx1 := context.TODO()
-
 	cli, err := database.Connect("sytalk", "article", ctx1)
-
-	// 查询完记得释放
-	defer func() {
-		if err := recover(); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{
-				"code":    0,
-				"message": fmt.Sprintf("发生错误：%s", err),
-			})
-		}
-		cli.Close(ctx1)
-	}()
 
 	if err != nil {
 		panic("数据库连接错误!")
@@ -60,11 +56,7 @@ func GetArticleList(ctx *gin.Context) {
 		limit := int64(pageSize)
 
 		if err := cli.Find(ctx1, bson.M{}).Sort("-createdAt").Skip(offset).Limit(limit).All(&article); err != nil {
-			ctx.JSON(http.StatusOK, gin.H{
-				"code":    0,
-				"message": "查询数据异常",
-			})
-			return
+			panic("查询数据异常")
 		}
 	}
 
@@ -88,30 +80,16 @@ func GetArticleList(ctx *gin.Context) {
 
 func UpdateArticle(ctx *gin.Context) {
 
+	// 查询完记得释放
+	defer close(ctx)
+
 	var article model.Article
 
 	if err := ctx.Bind(&article); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    0,
-			"message": err.Error(),
-		})
-		return
+		panic(err.Error())
 	}
 
-	ctx1 := context.TODO()
-
 	cli, err := database.Connect("sytalk", "article", ctx1)
-
-	// 查询完记得释放
-	defer func() {
-		if err := recover(); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"code":    0,
-				"message": fmt.Sprintf("发生错误：%s", err),
-			})
-		}
-		cli.Close(ctx1)
-	}()
 
 	if err != nil {
 		panic("数据库连接错误!")
@@ -147,32 +125,19 @@ func UpdateArticle(ctx *gin.Context) {
 
 func InsertArticle(ctx *gin.Context) {
 
+	// 查询完记得释放
+	defer close(ctx)
+
 	var article model.Article
 
 	if err := ctx.ShouldBind(&article); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    0,
-			"message": err.Error(),
-		})
-		return
+		panic(err.Error())
 	}
-
-	ctx1 := context.TODO()
 
 	cli, err := database.Connect("sytalk", "article", ctx1)
 
-	// 查询完记得释放
-	defer func() {
-		if err := recover(); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"code":    0,
-				"message": fmt.Sprintf("发生错误：%s", err),
-			})
-		}
-		cli.Close(ctx1)
-	}()
-
 	if err != nil {
+		// 防止数据库信息泄露
 		panic("数据库连接错误!")
 	}
 
@@ -208,30 +173,20 @@ func InsertArticle(ctx *gin.Context) {
 
 func DeleteArticle(ctx *gin.Context) {
 
-	ctx1 := context.TODO()
-
-	cli, err := database.Connect("sytalk", "article", ctx1)
-
 	// 查询完记得释放
-	defer func() {
-		if err := recover(); err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"code":    0,
-				"message": fmt.Sprintf("发生错误：%s", err),
-			})
-		}
-		cli.Close(ctx1)
-	}()
-
-	if err != nil {
-		panic("数据库连接错误!")
-	}
+	defer close(ctx)
 
 	// 把id类型转成objectid
 	aid, err := primitive.ObjectIDFromHex(ctx.Param("id"))
 
 	if err != nil {
 		panic("参数错误")
+	}
+
+	cli, err := database.Connect("sytalk", "article", ctx1)
+
+	if err != nil {
+		panic("数据库连接错误!")
 	}
 
 	// 删除数据
@@ -246,4 +201,15 @@ func DeleteArticle(ctx *gin.Context) {
 		"code":    1,
 		"message": "ok",
 	})
+}
+
+// 释放
+func close(ctx *gin.Context) {
+	if err := recover(); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"code":    0,
+			"message": fmt.Sprintf("发生错误：%s", err),
+		})
+	}
+	cli.Close(ctx1)
 }
