@@ -24,7 +24,6 @@ var (
 
 func GetArticleList(ctx *gin.Context) {
 
-	// 查询完记得释放
 	defer close(ctx)
 
 	// 当前页
@@ -40,6 +39,8 @@ func GetArticleList(ctx *gin.Context) {
 	if err != nil {
 		panic("数据库连接错误!")
 	}
+
+	defer cli.Close(ctx1)
 
 	total, err := cli.Find(ctx1, bson.M{}).Count()
 
@@ -80,9 +81,9 @@ func GetArticleList(ctx *gin.Context) {
 
 func UpdateArticle(ctx *gin.Context) {
 
-	// 查询完记得释放
 	defer close(ctx)
 
+	// 查询完记得释放
 	var article model.Article
 
 	if err := ctx.Bind(&article); err != nil {
@@ -94,6 +95,8 @@ func UpdateArticle(ctx *gin.Context) {
 	if err != nil {
 		panic("数据库连接错误!")
 	}
+
+	defer cli.Close(ctx1)
 
 	// 把id类型转成objectid
 	article.Id, err = primitive.ObjectIDFromHex(ctx.Param("id"))
@@ -140,6 +143,8 @@ func InsertArticle(ctx *gin.Context) {
 		// 防止数据库信息泄露
 		panic("数据库连接错误!")
 	}
+
+	defer cli.Close(ctx1)
 
 	ua := useragent.Parse(ctx.Request.UserAgent())
 
@@ -189,6 +194,8 @@ func DeleteArticle(ctx *gin.Context) {
 		panic("数据库连接错误!")
 	}
 
+	defer cli.Close(ctx1)
+
 	// 删除数据
 	err = cli.Remove(ctx1, bson.M{"_id": aid})
 
@@ -208,8 +215,7 @@ func close(ctx *gin.Context) {
 	if err := recover(); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"code":    0,
-			"message": fmt.Sprintf("发生错误：%s", err),
+			"message": err,
 		})
 	}
-	cli.Close(ctx1)
 }
