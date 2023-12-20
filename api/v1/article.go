@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -12,14 +11,8 @@ import (
 	"github.com/afyi/sytalk/model"
 	"github.com/gin-gonic/gin"
 	"github.com/mileusna/useragent"
-	"github.com/qiniu/qmgo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-)
-
-var (
-	cli  *qmgo.QmgoClient
-	ctx1 context.Context = context.TODO()
 )
 
 func GetArticleList(ctx *gin.Context) {
@@ -208,14 +201,4 @@ func DeleteArticle(ctx *gin.Context) {
 		"code":    1,
 		"message": "ok",
 	})
-}
-
-// 释放
-func close(ctx *gin.Context) {
-	if err := recover(); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    0,
-			"message": err,
-		})
-	}
 }

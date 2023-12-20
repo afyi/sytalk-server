@@ -2,97 +2,95 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
 
 // 自定义Claims
-type CustomClaims struct {
-	Userid   int32  `json:"id"`       // 用户id
-	Username string `json:"username"` // 用户昵称
+type MyClaims struct {
+	Id string `json:"userid"` // 用户id
 	jwt.RegisteredClaims
 }
 
-// 令牌有效期，7天有效
-const TokenExpireDuration = time.Hour * 24
-
 // 密钥
-var CustomSecret = []byte("89b7203b81a0273d")
+var (
+	MySecret []byte = []byte("hello world")
+	Prefix   string = "Bearer"
+)
 
 // 生成jwt
-func GenToken(userid int32, username string) (token, rToken string, err error) {
+func GenToken(userid string) (tokenString string, err error) {
 
-	// 创建声明
-	claims := CustomClaims{
-		userid,
-		username,
-		jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExpireDuration)),
-			Issuer:    "Sytalk Monitor",
+	claim := MyClaims{
+
+		Id: userid,
+
+		RegisteredClaims: jwt.RegisteredClaims{
+
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(3 * time.Hour * time.Duration(1))), // 过期时间3小时
+
+			IssuedAt: jwt.NewNumericDate(time.Now()), // 签发时间
+
+			NotBefore: jwt.NewNumericDate(time.Now()), // 生效时间
+
 		},
 	}
-	// 用指定的签名方法来创建token
-	token, err = jwt.NewWithClaims(jwt.SigningMethodES256, claims).SignedString(CustomSecret)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim) // 使用HS256算法
 
-	if err != nil {
-		return
+	tokenString, err = token.SignedString(MySecret)
+
+	return fmt.Sprintf("%s %s", Prefix, tokenString), err
+}
+
+func Secret() jwt.Keyfunc {
+
+	return func(token *jwt.Token) (interface{}, error) {
+
+		return MySecret, nil // 这是我的secret
+
 	}
 
-	// 生成refresh token
-	rToken, err = jwt.NewWithClaims(jwt.SigningMethodES256, jwt.StandardClaims{
-		ExpiresAt: time.Now().Add(TokenExpireDuration * 7).Unix(), // 过期时间，7天有效,
-		Issuer:    "Sytalk Monitor",
-	}).SignedString(CustomSecret)
-
-	// 返回token和refresh token
-	return
 }
 
 // 解析jwt
-func ParseToken(tokenString string) (*CustomClaims, error) {
-	// 因为自定义了签名方法，所以用 parseWithClaims来解析
-	token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (i interface{}, err error) {
-		return CustomSecret, nil
-	})
-	// 原生方法如下
-	// token, err := jwt.Parse(tokenString, func (token *jwt.Token) (i interface{}, err error)) {
-	//   return CustomSecret, nil
-	// }
+func ParseToken(tokenString string) (*MyClaims, error) {
+
+	token, err := jwt.ParseWithClaims(tokenString, &MyClaims{}, Secret())
+
 	if err != nil {
-		return nil, err
+
+		if ve, ok := err.(*jwt.ValidationError); ok {
+
+			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
+
+				return nil, errors.New("that's not even a token")
+
+			} else if ve.Errors&jwt.ValidationErrorExpired != 0 {
+
+				return nil, errors.New("token is expired")
+
+			} else if ve.Errors&jwt.ValidationErrorNotValidYet != 0 {
+
+				return nil, errors.New("token not active yet")
+
+			} else {
+
+				return nil, errors.New("couldn't handle this token")
+
+			}
+
+		}
+
 	}
-	// 对token对象中的claim进行类型断言
-	if claims, ok := token.Claims.(*CustomClaims); ok && token.Valid {
+
+	if claims, ok := token.Claims.(*MyClaims); ok && token.Valid {
+
 		return claims, nil
-	}
-	return nil, errors.New("令牌解析错误")
-}
 
-// 刷新jwt令牌
-func RefreshToken(token, rToken string) (newToken, newRToken string, err error) {
-	// 解析当前的rtoken
-	_, err = jwt.Parse(rToken, func(token *jwt.Token) (i interface{}, err error) {
-		return CustomSecret, nil
-	})
-
-	if err != nil {
-		return
 	}
 
-	var claims CustomClaims
+	return nil, errors.New("couldn't handle this token")
 
-	_, err = jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (i interface{}, err error) {
-		return CustomSecret, nil
-	})
-
-	// 错误类型断言
-	v, _ := err.(*jwt.ValidationError)
-
-	// 如果错误类型是已过期，那么直接重新验发
-	if v.Errors == jwt.ValidationErrorExpired {
-		return GenToken(claims.Userid, claims.Username)
-	}
-
-	return
 }

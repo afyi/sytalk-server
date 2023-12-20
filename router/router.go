@@ -14,6 +14,9 @@ func Init(r *gin.Engine) {
 		// 获取说说列表
 		apiv1.GET("/art", v1.GetArticleList)
 
+		// 用户登陆
+		apiv1.POST("/user/login", v1.Login)
+
 	}
 
 	apiv1.Use(middleware.JWTAuthMiddleware())
