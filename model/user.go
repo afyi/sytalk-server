@@ -22,6 +22,12 @@ type User struct {
 	UpdatedAt time.Time          `bson:"UpdatedAt" json:"UpdatedAt"`
 }
 
+// 这是生成jwt token用的结构体
+type UserClaims struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
 // 生成盐
 func (User *User) GetSalt() string {
 	b := make([]byte, 2)

@@ -126,7 +126,7 @@ func InsertArticle(ctx *gin.Context) {
 
 	var article model.Article
 
-	if err := ctx.ShouldBind(&article); err != nil {
+	if err := ctx.ShouldBindJSON(&article); err != nil {
 		panic(err.Error())
 	}
 

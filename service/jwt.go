@@ -3,29 +3,34 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/afyi/sytalk/model"
 	"github.com/golang-jwt/jwt/v4"
 )
 
 // 自定义Claims
 type MyClaims struct {
-	Id string `json:"userid"` // 用户id
+	Id   string `json:"userid"` // 用户id
+	Name string `json:"name"`
 	jwt.RegisteredClaims
 }
 
 // 密钥
 var (
 	MySecret []byte = []byte("hello world")
-	Prefix   string = "Bearer"
+	Prefix   string = "Bearer "
 )
 
 // 生成jwt
-func GenToken(userid string) (tokenString string, err error) {
+func GenToken(user *model.UserClaims) (tokenString string, err error) {
 
 	claim := MyClaims{
 
-		Id: userid,
+		Id: user.Id,
+
+		Name: user.Name,
 
 		RegisteredClaims: jwt.RegisteredClaims{
 
@@ -37,60 +42,40 @@ func GenToken(userid string) (tokenString string, err error) {
 
 		},
 	}
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim) // 使用HS256算法
 
 	tokenString, err = token.SignedString(MySecret)
 
-	return fmt.Sprintf("%s %s", Prefix, tokenString), err
-}
-
-func Secret() jwt.Keyfunc {
-
-	return func(token *jwt.Token) (interface{}, error) {
-
-		return MySecret, nil // 这是我的secret
-
-	}
-
+	return fmt.Sprintf("%s%s", Prefix, tokenString), err
 }
 
 // 解析jwt
 func ParseToken(tokenString string) (*MyClaims, error) {
 
-	token, err := jwt.ParseWithClaims(tokenString, &MyClaims{}, Secret())
+	// 解析类似 "Bearer xxxxxxxxxxxxxxx" 类型的token
+	newTokenString := strings.Replace(tokenString, Prefix, "", -1)
 
-	if err != nil {
+	claims := &MyClaims{}
 
-		if ve, ok := err.(*jwt.ValidationError); ok {
+	_, err := jwt.ParseWithClaims(newTokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		return MySecret, nil
+	})
 
-			if ve.Errors&jwt.ValidationErrorMalformed != 0 {
+	// 若token只是过期claims是有数据的，若token无法解析claims无数据
+	return claims, err
+}
 
-				return nil, errors.New("that's not even a token")
+func RenewToken(claims *MyClaims) (string, error) {
 
-			} else if ve.Errors&jwt.ValidationErrorExpired != 0 {
+	userClaims := &model.UserClaims{Id: claims.Id, Name: claims.Name}
 
-				return nil, errors.New("token is expired")
+	// 若token过期不超过10分钟则给它续签
+	if time.Now().Unix()-claims.ExpiresAt.Unix() < 600 {
 
-			} else if ve.Errors&jwt.ValidationErrorNotValidYet != 0 {
-
-				return nil, errors.New("token not active yet")
-
-			} else {
-
-				return nil, errors.New("couldn't handle this token")
-
-			}
-
-		}
+		return GenToken(userClaims)
 
 	}
 
-	if claims, ok := token.Claims.(*MyClaims); ok && token.Valid {
-
-		return claims, nil
-
-	}
-
-	return nil, errors.New("couldn't handle this token")
-
+	return "", errors.New("登陆已过期")
 }

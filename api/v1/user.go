@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -45,10 +44,9 @@ func Login(ctx *gin.Context) {
 	}
 
 	// 然后授权JWT
-	token, err := service.GenToken(user.Id.String())
+	token, err := service.GenToken(&model.UserClaims{Id: user.Id.String(), Name: user.Name})
 
 	if err != nil {
-		fmt.Println(err)
 		panic("令牌生成错误")
 	}
 
